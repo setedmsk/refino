@@ -1,0 +1,114 @@
+// Modelo single-tenant: existe UM servidor. Nao ha tabela "guild".
+// Isso elimina guildId de todas as queries e simplifica todo o resto.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  OWNER // voce. unico. nao pode ser rebaixado nem expulso.
+  ADMIN
+  MEMBER
+}
+
+enum ChannelType {
+  TEXT
+  VOICE
+}
+
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  displayName  String
+  passwordHash String
+  avatarColor  String   @default("#7c5cff") // avatar de inicial, igual ao do video
+  role         Role     @default(MEMBER)
+  createdAt    DateTime @default(now())
+
+  messages   Message[]
+  sessions   Session[]
+  voiceState VoiceState?
+  invites    Invite[]    @relation("InviteCreator")
+
+  @@index([role])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Invite {
+  id        String    @id @default(cuid())
+  code      String    @unique
+  createdBy String
+  creator   User      @relation("InviteCreator", fields: [createdBy], references: [id])
+  maxUses   Int       @default(1)
+  uses      Int       @default(0)
+  expiresAt DateTime?
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+}
+
+model Channel {
+  id       String      @id @default(cuid())
+  name     String
+  type     ChannelType
+  position Int         @default(0)
+  topic    String?
+
+  messages    Message[]
+  voiceStates VoiceState[]
+
+  @@index([type, position])
+}
+
+model Message {
+  id        String    @id @default(cuid())
+  content   String    @db.Text
+  channelId String
+  channel   Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  editedAt  DateTime?
+  createdAt DateTime  @default(now())
+
+  attachments Attachment[]
+
+  @@index([channelId, createdAt])
+}
+
+model Attachment {
+  id        String  @id @default(cuid())
+  messageId String
+  message   Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  url       String
+  filename  String
+  mimeType  String
+  sizeBytes Int
+}
+
+// Quem esta em qual sala de voz agora. Limpo no disconnect do socket.
+model VoiceState {
+  userId     String   @id
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channelId  String
+  channel    Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  muted      Boolean  @default(false)
+  deafened   Boolean  @default(false)
+  streaming  Boolean  @default(false) // compartilhando tela
+  cameraOn   Boolean  @default(false)
+  joinedAt   DateTime @default(now())
+
+  @@index([channelId])
+}
