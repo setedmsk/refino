@@ -141,21 +141,57 @@ export function detectSpeaking(stream, onChange, { threshold = 12, hangMs = 220 
   return () => { cancelAnimationFrame(raf); ctx.close(); };
 }
 
-/** Estatisticas reais da conexao, pra mostrar bitrate/fps na UI. */
-export async function readStats(pc) {
+/**
+ * Estatisticas reais da conexao, pra mostrar bitrate/fps na UI.
+ *
+ * Bitrate nao existe pronto no getStats: o que existe e um contador de bytes
+ * que so cresce. O numero sai da diferenca entre duas leituras, por isso esta
+ * funcao recebe a amostra anterior e devolve a atual para a proxima chamada.
+ * Sem `anterior`, os bitrates vem null — e a primeira leitura, nao da pra
+ * inventar taxa com um ponto so.
+ */
+export async function readStats(pc, anterior = null) {
   const report = await pc.getStats();
-  let out = null;
+  const agora = { at: performance.now(), outbound: null, inbound: null };
+
   report.forEach((s) => {
-    if (s.type === 'outbound-rtp' && s.kind === 'video' && !s.isRemote) {
-      out = {
-        bitrateKbps: null, // calcule comparando bytesSent entre duas leituras
-        bytesSent: s.bytesSent,
-        framesPerSecond: s.framesPerSecond,
-        frameWidth: s.frameWidth,
-        frameHeight: s.frameHeight,
-        qualityLimitation: s.qualityLimitationReason, // 'bandwidth' | 'cpu' | 'none'
+    if (s.type === 'outbound-rtp' && s.kind === 'video') {
+      agora.outbound = {
+        bytes: s.bytesSent,
+        framesPerSecond: s.framesPerSecond ?? null,
+        frameWidth: s.frameWidth ?? null,
+        frameHeight: s.frameHeight ?? null,
+        // 'none' | 'bandwidth' | 'cpu' | 'other' — o campo que explica por
+        // que a tela caiu de qualidade sem ninguem ter mexido em nada.
+        qualityLimitation: s.qualityLimitationReason ?? null,
+      };
+    }
+    if (s.type === 'inbound-rtp' && s.kind === 'video') {
+      agora.inbound = {
+        bytes: s.bytesReceived,
+        framesPerSecond: s.framesPerSecond ?? null,
+        frameWidth: s.frameWidth ?? null,
+        frameHeight: s.frameHeight ?? null,
+        packetsLost: s.packetsLost ?? 0,
       };
     }
   });
-  return out;
+
+  const segundos = anterior ? (agora.at - anterior.at) / 1000 : 0;
+  const taxa = (atual, antes) =>
+    atual && antes && segundos > 0
+      ? Math.max(0, Math.round(((atual.bytes - antes.bytes) * 8) / segundos / 1000))
+      : null;
+
+  return {
+    ...agora,
+    outbound: agora.outbound && {
+      ...agora.outbound,
+      bitrateKbps: taxa(agora.outbound, anterior?.outbound),
+    },
+    inbound: agora.inbound && {
+      ...agora.inbound,
+      bitrateKbps: taxa(agora.inbound, anterior?.inbound),
+    },
+  };
 }

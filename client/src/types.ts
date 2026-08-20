@@ -71,7 +71,39 @@ export type VoiceRoom = {
   muted: boolean;
   speaking: Record<string, boolean>;
   sharing: boolean;
+  localScreen: MediaStream | null;
+  presetName: PresetName;
+  stats: Record<string, PeerStats>;
   join: (channelId: string) => Promise<unknown>;
   leave: () => void;
   toggleMute: () => void;
+  startScreenShare: (opts?: { preset?: PresetName }) => Promise<void>;
+  stopScreenShare: () => Promise<void>;
+  changeQuality: (preset: PresetName) => Promise<void>;
 };
+
+export type OutboundVideoStats = {
+  bytes: number;
+  bitrateKbps: number | null;
+  framesPerSecond: number | null;
+  frameWidth: number | null;
+  frameHeight: number | null;
+  qualityLimitation: string | null;
+};
+
+export type InboundVideoStats = {
+  bytes: number;
+  bitrateKbps: number | null;
+  framesPerSecond: number | null;
+  frameWidth: number | null;
+  frameHeight: number | null;
+  packetsLost: number;
+};
+
+export type PeerStats = {
+  at: number;
+  outbound: OutboundVideoStats | null;
+  inbound: InboundVideoStats | null;
+};
+
+export type PresetName = 'leitura' | 'equilibrado' | 'jogo' | 'maximo';

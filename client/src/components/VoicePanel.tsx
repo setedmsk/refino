@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { User, VoicePresence, VoiceRoom } from '../types';
 import { Avatar } from './Avatar';
 
@@ -29,6 +29,27 @@ type Props = {
 };
 
 export function VoicePanel({ voice, channelName, me, members }: Props) {
+  const [shareError, setShareError] = useState<string | null>(null);
+  const [shareBusy, setShareBusy] = useState(false);
+
+  async function onToggleShare() {
+    setShareError(null);
+    setShareBusy(true);
+    try {
+      if (voice.sharing) await voice.stopScreenShare();
+      else await voice.startScreenShare();
+    } catch (err) {
+      // Fechar o seletor do navegador cai aqui como NotAllowedError. Isso e
+      // desistencia, nao falha — nao vale poluir a tela com erro vermelho.
+      const nome = err instanceof DOMException ? err.name : '';
+      if (nome !== 'NotAllowedError' && nome !== 'AbortError') {
+        setShareError(err instanceof Error ? err.message : 'Não deu para compartilhar.');
+      }
+    } finally {
+      setShareBusy(false);
+    }
+  }
+
   return (
     <section className="voice-panel">
       <header>
@@ -49,6 +70,7 @@ export function VoicePanel({ voice, channelName, me, members }: Props) {
                 {user.displayName}
                 {user.id === me.id && <small> você</small>}
               </span>
+              {presence.streaming && <span className="tag live">tela</span>}
               {presence.muted && <span className="tag">mudo</span>}
             </li>
           );
@@ -59,10 +81,15 @@ export function VoicePanel({ voice, channelName, me, members }: Props) {
         <button onClick={voice.toggleMute} className={voice.muted ? 'on' : undefined}>
           {voice.muted ? 'Ativar microfone' : 'Silenciar'}
         </button>
+        <button onClick={onToggleShare} disabled={shareBusy}>
+          {voice.sharing ? 'Parar tela' : 'Compartilhar tela'}
+        </button>
         <button onClick={voice.leave} className="danger">
-          Sair da chamada
+          Sair
         </button>
       </div>
+
+      {shareError && <p className="error voice-error">{shareError}</p>}
 
       {Object.entries(voice.peers).map(([peerId, p]) =>
         p.stream ? <PeerAudio key={peerId} stream={p.stream} muted={false} /> : null

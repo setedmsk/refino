@@ -5,6 +5,7 @@ import {
   tuneVideoSender,
   preferCodecs,
   detectSpeaking,
+  readStats,
   PRESETS,
 } from '../lib/media.js';
 
@@ -24,6 +25,9 @@ export function useVoiceRoom(socket, me) {
   const [channelId, setChannelId] = useState(null);
   const [muted, setMuted] = useState(false);
   const [speaking, setSpeaking] = useState({}); // userId -> boolean, inclui voce
+  const [presetName, setPresetName] = useState('equilibrado');
+  const [localScreen, setLocalScreen] = useState(null);
+  const [stats, setStats] = useState({});       // userId -> { outbound, inbound }
 
   const pcs = useRef(new Map());                // userId -> RTCPeerConnection
   const micStream = useRef(null);
@@ -125,7 +129,12 @@ export function useVoiceRoom(socket, me) {
     };
 
     pc.ontrack = (e) => {
-      const stream = e.streams[0];
+      // Faixa reservada com addTransceiver nao tem stream associado: sem
+      // msid no SDP, o ontrack do outro lado chega com e.streams vazio. O
+      // audio escapa porque addTrack(t, micStream) leva o msid junto; o
+      // video da tela, nao. Sem este fallback os bytes chegam e o video
+      // nao tem onde ser pendurado.
+      const stream = e.streams[0] ?? new MediaStream([e.track]);
       setPeers((prev) => ({
         ...prev,
         [peerId]: {
@@ -227,10 +236,13 @@ export function useVoiceRoom(socket, me) {
     screenStream.current?.getTracks().forEach((t) => t.stop());
     micStream.current = null;
     screenStream.current = null;
+    statsAnteriores.current.clear();
     setPeers({});
     setSpeaking({});
+    setStats({});
     setConnected(false);
     setChannelId(null);
+    setLocalScreen(null);
     setSharing(false);
   }, [socket]);
 
@@ -253,7 +265,10 @@ export function useVoiceRoom(socket, me) {
   /* --------------------------- tela ------------------------------------ */
 
   const startScreenShare = useCallback(async (opts = {}) => {
-    const { stream, preset } = await captureScreen(opts);
+    // Cancelar o seletor do navegador rejeita aqui. Deixa subir: quem chamou
+    // sabe distinguir "desisti" de "deu errado" melhor que o hook.
+    const escolhido = opts.preset ?? presetName;
+    const { stream, preset } = await captureScreen({ ...opts, preset: escolhido });
     screenStream.current = stream;
     currentPreset.current = preset;
 
@@ -270,9 +285,11 @@ export function useVoiceRoom(socket, me) {
     // O usuario clicou em "parar de compartilhar" na barra do navegador/SO.
     track.onended = () => stopScreenShare();
 
+    setPresetName(escolhido);
+    setLocalScreen(stream);
     setSharing(true);
     socket.emit('voice:state', { streaming: true });
-  }, [socket]);
+  }, [socket, presetName]);
 
   const stopScreenShare = useCallback(async () => {
     screenStream.current?.getTracks().forEach((t) => t.stop());
@@ -280,14 +297,19 @@ export function useVoiceRoom(socket, me) {
     await Promise.all(
       [...screenSenders.current.values()].map((s) => s.replaceTrack(null))
     );
+    setLocalScreen(null);
     setSharing(false);
     socket.emit('voice:state', { streaming: false });
   }, [socket]);
 
   /** Troca o preset ao vivo, sem derrubar a transmissao. */
-  const changeQuality = useCallback(async (presetName) => {
-    const preset = PRESETS[presetName];
-    if (!preset || !screenStream.current) return;
+  const changeQuality = useCallback(async (nome) => {
+    const preset = PRESETS[nome];
+    if (!preset) return;
+    setPresetName(nome);
+
+    // Sem transmissao rolando, o preset fica guardado para o proximo start.
+    if (!screenStream.current) return;
     currentPreset.current = preset;
 
     const track = screenStream.current.getVideoTracks()[0];
@@ -301,6 +323,38 @@ export function useVoiceRoom(socket, me) {
       [...screenSenders.current.values()].map((s) => tuneVideoSender(s, preset))
     );
   }, []);
+
+  /**
+   * Amostragem de 1s das estatisticas. Bitrate precisa de duas leituras, entao
+   * a anterior fica guardada aqui. So roda em chamada — sem ninguem na sala
+   * nao ha o que medir.
+   */
+  const statsAnteriores = useRef(new Map());    // userId -> amostra
+
+  useEffect(() => {
+    if (!connected) {
+      statsAnteriores.current.clear();
+      setStats({});
+      return;
+    }
+
+    let vivo = true;
+    const timer = setInterval(async () => {
+      const leituras = await Promise.all(
+        [...pcs.current.entries()].map(async ([peerId, pc]) => {
+          const amostra = await readStats(pc, statsAnteriores.current.get(peerId));
+          statsAnteriores.current.set(peerId, amostra);
+          return [peerId, amostra];
+        })
+      );
+      if (vivo) setStats(Object.fromEntries(leituras));
+    }, 1000);
+
+    return () => {
+      vivo = false;
+      clearInterval(timer);
+    };
+  }, [connected]);
 
   /* --------------------------- sinalizacao ----------------------------- */
 
@@ -384,6 +438,9 @@ export function useVoiceRoom(socket, me) {
     muted,
     speaking,
     sharing,
+    localScreen,
+    presetName,
+    stats,
     join,
     leave,
     toggleMute,
