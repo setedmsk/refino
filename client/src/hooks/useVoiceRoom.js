@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { captureMicrophone, captureScreen, tuneVideoSender, preferCodecs, PRESETS } from '../lib/media.js';
+import {
+  captureMicrophone,
+  captureScreen,
+  tuneVideoSender,
+  preferCodecs,
+  detectSpeaking,
+  PRESETS,
+} from '../lib/media.js';
 
 /**
  * Malha P2P: cada participante mantem uma RTCPeerConnection com cada outro.
@@ -14,12 +21,59 @@ export function useVoiceRoom(socket, me) {
   const [peers, setPeers] = useState({});       // userId -> { stream, screenStream }
   const [connected, setConnected] = useState(false);
   const [sharing, setSharing] = useState(false);
+  const [channelId, setChannelId] = useState(null);
+  const [muted, setMuted] = useState(false);
+  const [speaking, setSpeaking] = useState({}); // userId -> boolean, inclui voce
 
   const pcs = useRef(new Map());                // userId -> RTCPeerConnection
   const micStream = useRef(null);
   const screenStream = useRef(null);
   const screenSenders = useRef(new Map());      // userId -> RTCRtpSender
   const iceConfig = useRef(null);
+
+  // Candidatos que chegaram antes da descricao remota. addIceCandidate
+  // rejeita nesse estado, e quem oferta SEMPRE recebe candidatos do outro
+  // lado antes de processar a answer. Sem esta fila a conexao fecha as
+  // vezes e falha as vezes, sem padrao aparente.
+  const pendingIce = useRef(new Map());         // userId -> RTCIceCandidate[]
+
+  // Uma limpeza de detectSpeaking por stream analisado.
+  const speakingStops = useRef(new Map());      // userId -> () => void
+
+  const watchSpeaking = useCallback((userId, stream) => {
+    speakingStops.current.get(userId)?.();
+    const stop = detectSpeaking(stream, (isSpeaking) => {
+      setSpeaking((prev) =>
+        prev[userId] === isSpeaking ? prev : { ...prev, [userId]: isSpeaking }
+      );
+    });
+    speakingStops.current.set(userId, stop);
+  }, []);
+
+  const unwatchSpeaking = useCallback((userId) => {
+    speakingStops.current.get(userId)?.();
+    speakingStops.current.delete(userId);
+    setSpeaking((prev) => {
+      if (!(userId in prev)) return prev;
+      const next = { ...prev };
+      delete next[userId];
+      return next;
+    });
+  }, []);
+
+  /** Descarrega os candidatos represados assim que a descricao remota entra. */
+  const flushIce = useCallback(async (peerId, pc) => {
+    const queued = pendingIce.current.get(peerId);
+    if (!queued) return;
+    pendingIce.current.delete(peerId);
+    for (const candidate of queued) {
+      try {
+        await pc.addIceCandidate(candidate);
+      } catch (err) {
+        console.warn('candidato ICE represado foi recusado', err);
+      }
+    }
+  }, []);
 
   const getIceConfig = useCallback(async () => {
     if (!iceConfig.current) {
@@ -48,15 +102,22 @@ export function useVoiceRoom(socket, me) {
     // Reserva um transceiver de video ja no inicio. Assim, quando alguem
     // comecar a compartilhar tela, so trocamos a track (replaceTrack) em
     // vez de renegociar tudo — a tela aparece quase instantaneamente.
-    const videoTx = pc.addTransceiver('video', { direction: 'sendrecv' });
-    preferCodecs(videoTx);
-    screenSenders.current.set(peerId, videoTx.sender);
+    //
+    // So quem oferta cria. Do lado que responde o transceiver de video nasce
+    // junto com a descricao remota; criar um aqui tambem deixa um orfao sem
+    // mid, fora do SDP, e e nele que o screenSenders acabaria apontando —
+    // replaceTrack funcionaria e ninguem receberia nada.
+    if (isInitiator) {
+      const videoTx = pc.addTransceiver('video', { direction: 'sendrecv' });
+      preferCodecs(videoTx);
+      screenSenders.current.set(peerId, videoTx.sender);
 
-    // Se ja estamos compartilhando quando alguem entra, ele ja recebe.
-    if (screenStream.current) {
-      const track = screenStream.current.getVideoTracks()[0];
-      await videoTx.sender.replaceTrack(track);
-      await tuneVideoSender(videoTx.sender, currentPreset.current);
+      // Se ja estamos compartilhando quando alguem entra, ele ja recebe.
+      if (screenStream.current) {
+        const track = screenStream.current.getVideoTracks()[0];
+        await videoTx.sender.replaceTrack(track);
+        await tuneVideoSender(videoTx.sender, currentPreset.current);
+      }
     }
 
     pc.onicecandidate = (e) => {
@@ -72,6 +133,9 @@ export function useVoiceRoom(socket, me) {
           [e.track.kind === 'video' ? 'screenStream' : 'stream']: stream,
         },
       }));
+      // O anel verde do outro sai do audio que chega dele, nao de um evento
+      // do servidor: e o que a gente realmente esta ouvindo.
+      if (e.track.kind === 'audio') watchSpeaking(peerId, stream);
     };
 
     pc.onconnectionstatechange = () => {
@@ -99,34 +163,92 @@ export function useVoiceRoom(socket, me) {
 
   const currentPreset = useRef(PRESETS.equilibrado);
 
+  /**
+   * Do lado que responde, o transceiver de video chega recvonly junto com a
+   * oferta. Abrir para sendrecv ANTES de montar a answer e o que deixa este
+   * lado compartilhar tela depois so com replaceTrack — sem renegociar.
+   */
+  const adoptVideoTransceiver = useCallback(async (peerId, pc) => {
+    const videoTx = pc
+      .getTransceivers()
+      .find((t) => t.receiver.track?.kind === 'video');
+    if (!videoTx) return;
+
+    videoTx.direction = 'sendrecv';
+    preferCodecs(videoTx);
+    screenSenders.current.set(peerId, videoTx.sender);
+
+    if (screenStream.current) {
+      await videoTx.sender.replaceTrack(screenStream.current.getVideoTracks()[0]);
+      await tuneVideoSender(videoTx.sender, currentPreset.current);
+    }
+  }, []);
+
   /* --------------------------- entrar / sair --------------------------- */
 
-  const join = useCallback(async (channelId) => {
-    micStream.current = await captureMicrophone();
+  const join = useCallback(async (targetChannelId) => {
+    // O microfone precisa existir antes do voice:join: os outros comecam a
+    // ofertar assim que o servidor anuncia a entrada, e uma oferta sem
+    // faixa de audio nasce com as m-lines trocadas.
+    if (!micStream.current) {
+      micStream.current = await captureMicrophone();
+    }
+    micStream.current.getAudioTracks().forEach((t) => (t.enabled = !muted));
+    watchSpeaking(me.id, micStream.current);
 
-    socket.emit('voice:join', { channelId }, async ({ ok, data, error }) => {
-      if (!ok) return console.error(error);
-      setConnected(true);
-      // Quem chega e o iniciador com todo mundo que ja estava.
-      for (const peer of data.peers) {
-        await createPeer(peer.id, true);
-      }
+    return new Promise((resolve, reject) => {
+      socket.emit('voice:join', { channelId: targetChannelId }, async ({ ok, data, error }) => {
+        if (!ok) {
+          unwatchSpeaking(me.id);
+          micStream.current?.getTracks().forEach((t) => t.stop());
+          micStream.current = null;
+          return reject(new Error(error));
+        }
+        setChannelId(targetChannelId);
+        setConnected(true);
+        // Quem chega e o iniciador com todo mundo que ja estava.
+        for (const peer of data.peers) {
+          await createPeer(peer.id, true);
+        }
+        resolve(data);
+      });
     });
-  }, [socket, createPeer]);
+  }, [socket, createPeer, me.id, muted, watchSpeaking, unwatchSpeaking]);
 
   const leave = useCallback(() => {
     socket.emit('voice:leave');
     pcs.current.forEach((pc) => pc.close());
     pcs.current.clear();
     screenSenders.current.clear();
+    pendingIce.current.clear();
+    speakingStops.current.forEach((stop) => stop());
+    speakingStops.current.clear();
     micStream.current?.getTracks().forEach((t) => t.stop());
     screenStream.current?.getTracks().forEach((t) => t.stop());
     micStream.current = null;
     screenStream.current = null;
     setPeers({});
+    setSpeaking({});
     setConnected(false);
+    setChannelId(null);
     setSharing(false);
   }, [socket]);
+
+  /**
+   * Mudo de verdade: a faixa para de mandar audio. Nao e so um icone —
+   * `enabled = false` faz o navegador enviar silencio, sem renegociar nada.
+   */
+  const toggleMute = useCallback(() => {
+    setMuted((prev) => {
+      const next = !prev;
+      micStream.current?.getAudioTracks().forEach((t) => (t.enabled = !next));
+      if (next) {
+        setSpeaking((s) => (s[me.id] ? { ...s, [me.id]: false } : s));
+      }
+      socket.emit('voice:state', { muted: next });
+      return next;
+    });
+  }, [socket, me.id]);
 
   /* --------------------------- tela ------------------------------------ */
 
@@ -190,16 +312,31 @@ export function useVoiceRoom(socket, me) {
     const onOffer = async ({ from, payload }) => {
       const pc = await createPeer(from, false);
       await pc.setRemoteDescription(payload);
+      await adoptVideoTransceiver(from, pc);
+      await flushIce(from, pc);
       await pc.setLocalDescription(await pc.createAnswer());
       socket.emit('voice:answer', { to: from, payload: pc.localDescription });
     };
 
     const onAnswer = async ({ from, payload }) => {
-      await pcs.current.get(from)?.setRemoteDescription(payload);
+      const pc = pcs.current.get(from);
+      if (!pc) return;
+      await pc.setRemoteDescription(payload);
+      await flushIce(from, pc);
     };
 
     const onIce = async ({ from, payload }) => {
-      try { await pcs.current.get(from)?.addIceCandidate(payload); }
+      const pc = pcs.current.get(from);
+
+      // Sem descricao remota o candidato nao entra. Guarda em vez de perder.
+      if (!pc || !pc.remoteDescription) {
+        const queue = pendingIce.current.get(from) ?? [];
+        queue.push(payload);
+        pendingIce.current.set(from, queue);
+        return;
+      }
+
+      try { await pc.addIceCandidate(payload); }
       catch (err) { console.warn('candidato ICE descartado', err); }
     };
 
@@ -207,6 +344,8 @@ export function useVoiceRoom(socket, me) {
       pcs.current.get(userId)?.close();
       pcs.current.delete(userId);
       screenSenders.current.delete(userId);
+      pendingIce.current.delete(userId);
+      unwatchSpeaking(userId);
       setPeers((prev) => { const next = { ...prev }; delete next[userId]; return next; });
     };
 
@@ -223,9 +362,35 @@ export function useVoiceRoom(socket, me) {
       socket.off('voice:ice', onIce);
       socket.off('voice:peer-left', onPeerLeft);
     };
-  }, [socket, createPeer]);
+  }, [socket, createPeer, flushIce, adoptVideoTransceiver, unwatchSpeaking]);
 
-  return { peers, connected, sharing, join, leave, startScreenShare, stopScreenShare, changeQuality };
+  // Fechar a aba no meio da chamada nao pode deixar o microfone ligado nem
+  // as conexoes penduradas do outro lado.
+  useEffect(() => {
+    return () => {
+      pcs.current.forEach((pc) => pc.close());
+      pcs.current.clear();
+      speakingStops.current.forEach((stop) => stop());
+      speakingStops.current.clear();
+      micStream.current?.getTracks().forEach((t) => t.stop());
+      screenStream.current?.getTracks().forEach((t) => t.stop());
+    };
+  }, []);
+
+  return {
+    peers,
+    connected,
+    channelId,
+    muted,
+    speaking,
+    sharing,
+    join,
+    leave,
+    toggleMute,
+    startScreenShare,
+    stopScreenShare,
+    changeQuality,
+  };
 }
 
 function authHeader() {

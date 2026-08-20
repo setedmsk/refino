@@ -1,4 +1,4 @@
-import type { Channel, User } from '../types';
+import type { Channel, User, VoicePresence } from '../types';
 import { Avatar } from './Avatar';
 
 type Props = {
@@ -7,9 +7,23 @@ type Props = {
   onSelect: (id: string) => void;
   me: User;
   onLogout: () => void;
+  voiceMembers: (channelId: string) => Array<{ user: User; presence: VoicePresence }>;
+  onJoinVoice: (channelId: string) => void;
+  voiceChannelId: string | null;
+  speaking: Record<string, boolean>;
 };
 
-export function ChannelList({ channels, activeId, onSelect, me, onLogout }: Props) {
+export function ChannelList({
+  channels,
+  activeId,
+  onSelect,
+  me,
+  onLogout,
+  voiceMembers,
+  onJoinVoice,
+  voiceChannelId,
+  speaking,
+}: Props) {
   const text = channels.filter((c) => c.type === 'TEXT');
   const voice = channels.filter((c) => c.type === 'VOICE');
 
@@ -36,15 +50,46 @@ export function ChannelList({ channels, activeId, onSelect, me, onLogout }: Prop
           <>
             <h2>Canais de voz</h2>
             <ul>
-              {voice.map((c) => (
-                <li key={c.id}>
-                  {/* Etapa 3 liga isso. Aqui so aparece pra nao sumir da lista. */}
-                  <button className="channel disabled" disabled title="Etapa 3">
-                    <span className="hash">♪</span>
-                    {c.name}
-                  </button>
-                </li>
-              ))}
+              {voice.map((c) => {
+                const members = voiceMembers(c.id);
+                return (
+                  <li key={c.id}>
+                    <button
+                      className={
+                        c.id === voiceChannelId ? 'channel active' : 'channel'
+                      }
+                      onClick={() => onJoinVoice(c.id)}
+                    >
+                      <span className="hash">♪</span>
+                      {c.name}
+                      {members.length > 0 && (
+                        <span className="voice-count">{members.length}</span>
+                      )}
+                    </button>
+
+                    {members.length > 0 && (
+                      <ul className="voice-roster">
+                        {members.map(({ user, presence }) => (
+                          <li
+                            key={user.id}
+                            className={
+                              speaking[user.id] && !presence.muted
+                                ? 'speaking'
+                                : undefined
+                            }
+                          >
+                            <span className="ring">
+                              <Avatar user={user} size={22} />
+                            </span>
+                            {user.displayName}
+                            {presence.muted && <span className="tag">mudo</span>}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           </>
         )}

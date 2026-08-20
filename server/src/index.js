@@ -165,6 +165,10 @@ io.on('connection', (socket) => {
     const channel = await prisma.channel.findUnique({ where: { id: channelId } });
     if (channel?.type !== 'VOICE') throw new Error('Esse canal nao e de voz.');
 
+    // Sair da sala anterior antes de entrar na nova. Sem isso o socket fica
+    // nas duas e os antigos vizinhos nunca recebem o peer-left.
+    await leaveVoice(socket);
+
     await prisma.voiceState.upsert({
       where: { userId: user.id },
       create: { userId: user.id, channelId },
@@ -181,7 +185,11 @@ io.on('connection', (socket) => {
       .filter((s) => s.data.user.id !== user.id)
       .map((s) => publicUser(s.data.user));
 
-    socket.to(room).emit('voice:peer-joined', publicUser(user));
+    // Roster e coisa de todo mundo, nao so de quem esta na sala: o
+    // /api/bootstrap ja entrega os voiceStates inteiros. Quem nao esta no
+    // canal usa isso para ver quem esta em ligacao; quem esta usa para
+    // saber com quem negociar.
+    io.emit('voice:peer-joined', { channelId, user: publicUser(user) });
     return { peers };
   }));
 
@@ -193,7 +201,7 @@ io.on('connection', (socket) => {
       where: { userId: user.id },
       data: allowed,
     });
-    io.to(`voice:${state.channelId}`).emit('voice:state', { userId: user.id, ...allowed });
+    io.emit('voice:state', { userId: user.id, channelId: state.channelId, ...allowed });
   }));
 
   // Relay puro de sinalizacao. O servidor nunca ve audio nem video —
@@ -218,7 +226,7 @@ async function leaveVoice(socket) {
   socket.data.voiceChannelId = null;
   socket.leave(`voice:${channelId}`);
   await prisma.voiceState.deleteMany({ where: { userId: socket.data.user.id } });
-  io.to(`voice:${channelId}`).emit('voice:peer-left', { userId: socket.data.user.id });
+  io.emit('voice:peer-left', { channelId, userId: socket.data.user.id });
 }
 
 async function disconnectUser(userId) {

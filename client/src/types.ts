@@ -53,3 +53,25 @@ export type Bootstrap = {
 export type Ack<T = unknown> =
   | { ok: true; data: T }
   | { ok: false; error: string };
+
+/** Onde cada pessoa esta em voz agora, do ponto de vista da barra lateral. */
+export type VoicePresence = {
+  channelId: string;
+  muted: boolean;
+  deafened: boolean;
+  streaming: boolean;
+  cameraOn: boolean;
+};
+
+/** O que o hook de voz devolve. O arquivo e .js, entao o contrato mora aqui. */
+export type VoiceRoom = {
+  peers: Record<string, { stream?: MediaStream; screenStream?: MediaStream }>;
+  connected: boolean;
+  channelId: string | null;
+  muted: boolean;
+  speaking: Record<string, boolean>;
+  sharing: boolean;
+  join: (channelId: string) => Promise<unknown>;
+  leave: () => void;
+  toggleMute: () => void;
+};

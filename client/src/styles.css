@@ -88,7 +88,7 @@ button, input, textarea { font: inherit; color: inherit; }
 
 /* ------------------------------- layout ------------------------------- */
 
-.app { display: grid; grid-template-columns: 240px 1fr; height: 100vh; }
+.app { display: grid; grid-template-columns: 260px 1fr; height: 100vh; }
 
 .sidebar {
   display: flex;
@@ -205,3 +205,105 @@ button, input, textarea { font: inherit; color: inherit; }
 
 .composer textarea:focus { outline: 1px solid var(--accent); }
 .composer .error { margin: 0 0 6px; font-size: 12px; }
+
+/* --------------------------------- voz -------------------------------- */
+
+.sidebar-column {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg-2);
+  border-right: 1px solid var(--line);
+}
+
+.sidebar-column .sidebar { border-right: 0; flex: 1; min-height: 0; }
+
+.voice-count {
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.voice-roster {
+  margin: 2px 0 6px;
+  padding: 0 0 0 18px;
+  list-style: none;
+}
+
+.voice-roster li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.tag {
+  margin-left: auto;
+  color: var(--error);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+/*
+ * O anel verde. Fica sempre no DOM e so muda de cor — assim ele acende no
+ * mesmo quadro em que a fala comeca, sem reflow e sem piscar o avatar.
+ */
+.ring {
+  display: inline-grid;
+  place-items: center;
+  padding: 2px;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  transition: border-color 90ms linear;
+}
+
+.speaking > .ring { border-color: #3ba55d; }
+
+.voice-panel {
+  border-top: 1px solid var(--line);
+  padding: 10px;
+}
+
+.voice-panel header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.voice-members { margin: 0 0 10px; padding: 0; list-style: none; }
+
+.voice-members li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 13px;
+}
+
+.voice-name { display: flex; gap: 4px; align-items: baseline; }
+.voice-name small { color: var(--muted); font-size: 11px; }
+
+.voice-controls { display: flex; gap: 6px; }
+
+.voice-controls button {
+  flex: 1;
+  padding: 7px;
+  background: var(--bg-3);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.voice-controls button:hover { background: var(--line); }
+.voice-controls button.on { border-color: var(--error); color: var(--error); }
+.voice-controls button.danger { color: var(--error); }
+
+.voice-error { margin: 0; padding: 8px 10px; font-size: 12px; }
