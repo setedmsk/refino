@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { useAuth } from '../state/auth';
+import { getServerUrl, isElectron, setServerUrl } from '../lib/config';
 
 export function Login() {
   const { login, register } = useAuth();
@@ -10,11 +11,15 @@ export function Login() {
   const [inviteCode, setInviteCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [servidor, setServidor] = useState(getServerUrl());
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     setError(null);
     setBusy(true);
+    // Precisa entrar antes da primeira chamada: no Electron nao existe
+    // origem para cair de volta.
+    if (isElectron) setServerUrl(servidor);
     try {
       if (mode === 'login') {
         await login(username, password);
@@ -37,6 +42,18 @@ export function Login() {
     <div className="login">
       <form className="login-card" onSubmit={submit}>
         <h1>{mode === 'login' ? 'Entrar' : 'Criar conta'}</h1>
+
+        {isElectron && (
+          <label>
+            Servidor
+            <input
+              value={servidor}
+              onChange={(e) => setServidor(e.target.value)}
+              placeholder="http://192.168.0.10:3001"
+              required
+            />
+          </label>
+        )}
 
         <label>
           Usuário

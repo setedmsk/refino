@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { isElectron } from '../lib/config';
+import { SourcePicker } from './SourcePicker';
 import type { User, VoicePresence, VoiceRoom } from '../types';
 import { Avatar } from './Avatar';
 
@@ -31,16 +33,14 @@ type Props = {
 export function VoicePanel({ voice, channelName, me, members }: Props) {
   const [shareError, setShareError] = useState<string | null>(null);
   const [shareBusy, setShareBusy] = useState(false);
+  const [pickerAberto, setPickerAberto] = useState(false);
 
-  async function onToggleShare() {
+  async function compartilhar(sourceId?: string) {
     setShareError(null);
     setShareBusy(true);
     try {
-      if (voice.sharing) await voice.stopScreenShare();
-      else await voice.startScreenShare();
+      await voice.startScreenShare(sourceId ? { sourceId } : {});
     } catch (err) {
-      // Fechar o seletor do navegador cai aqui como NotAllowedError. Isso e
-      // desistencia, nao falha — nao vale poluir a tela com erro vermelho.
       const nome = err instanceof DOMException ? err.name : '';
       if (nome !== 'NotAllowedError' && nome !== 'AbortError') {
         setShareError(err instanceof Error ? err.message : 'Não deu para compartilhar.');
@@ -49,6 +49,25 @@ export function VoicePanel({ voice, channelName, me, members }: Props) {
       setShareBusy(false);
     }
   }
+
+  async function onToggleShare() {
+    if (voice.sharing) {
+      setShareBusy(true);
+      try {
+        await voice.stopScreenShare();
+      } finally {
+        setShareBusy(false);
+      }
+      return;
+    }
+
+    // No Electron a lista com miniatura e nossa; no navegador quem mostra o
+    // seletor e o proprio Chrome e nao da para substituir.
+    if (isElectron) return setPickerAberto(true);
+    await compartilhar();
+  }
+
+
 
   return (
     <section className="voice-panel">
@@ -90,6 +109,16 @@ export function VoicePanel({ voice, channelName, me, members }: Props) {
       </div>
 
       {shareError && <p className="error voice-error">{shareError}</p>}
+
+      {pickerAberto && (
+        <SourcePicker
+          onClose={() => setPickerAberto(false)}
+          onPick={(sourceId) => {
+            setPickerAberto(false);
+            compartilhar(sourceId);
+          }}
+        />
+      )}
 
       {Object.entries(voice.peers).map(([peerId, p]) =>
         p.stream ? <PeerAudio key={peerId} stream={p.stream} muted={false} /> : null

@@ -1,5 +1,6 @@
 import { io, type Socket } from 'socket.io-client';
 import { getToken } from './api';
+import { getServerUrl } from './config';
 
 /**
  * Uma conexao por sessao. O token vai no handshake — o servidor resolve o
@@ -9,7 +10,11 @@ let socket: Socket | null = null;
 
 export function connectSocket(): Socket {
   if (socket) return socket;
-  socket = io({ auth: { token: getToken() }, transports: ['websocket', 'polling'] });
+  // Sem endereco, mesma origem (navegador). Com endereco, o host guardado
+  // no login — e o caso do Electron, que roda em file:// e nao tem origem.
+  const base = getServerUrl();
+  const opts = { auth: { token: getToken() }, transports: ['websocket', 'polling'] };
+  socket = base ? io(base, opts) : io(opts);
   return socket;
 }
 

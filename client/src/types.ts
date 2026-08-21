@@ -106,7 +106,12 @@ export type VoiceRoom = {
   join: (channelId: string) => Promise<unknown>;
   leave: () => void;
   toggleMute: () => void;
-  startScreenShare: (opts?: { preset?: PresetName }) => Promise<void>;
+  startScreenShare: (opts?: {
+    preset?: PresetName;
+    /** Só no Electron: id vindo do desktopCapturer. */
+    sourceId?: string;
+    withAudio?: boolean;
+  }) => Promise<void>;
   stopScreenShare: () => Promise<void>;
   changeQuality: (preset: PresetName) => Promise<void>;
 };

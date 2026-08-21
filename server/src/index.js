@@ -18,7 +18,20 @@ import {
 const prisma = new PrismaClient();
 const app = express();
 const http = createServer(app);
-const io = new Server(http, { cors: { origin: process.env.CLIENT_ORIGIN ?? '*' } });
+// O app do Electron carrega de file:// e nao manda Origin. Uma lista fixa
+// recusaria o desktop; por isso "sem origem" e sempre aceito, e CLIENT_ORIGIN
+// (que aceita varios separados por virgula) restringe so os navegadores.
+// Quem protege o servidor e o token, nao o CORS.
+const origensPermitidas = process.env.CLIENT_ORIGIN?.split(',').map((o) => o.trim());
+
+const io = new Server(http, {
+  cors: {
+    origin(origin, callback) {
+      if (!origin || !origensPermitidas) return callback(null, true);
+      callback(null, origensPermitidas.includes(origin));
+    },
+  },
+});
 
 app.use(cors());
 app.use(express.json());

@@ -26,21 +26,7 @@ export async function captureScreen({ preset = 'equilibrado', sourceId = null, w
   const p = PRESETS[preset] ?? PRESETS.equilibrado;
 
   const stream = sourceId
-    ? await navigator.mediaDevices.getUserMedia({
-        // caminho do Electron: constraints "chromeMediaSource" legadas
-        audio: withAudio
-          ? { mandatory: { chromeMediaSource: 'desktop' } }
-          : false,
-        video: {
-          mandatory: {
-            chromeMediaSource: 'desktop',
-            chromeMediaSourceId: sourceId,
-            maxWidth: p.width,
-            maxHeight: p.height,
-            maxFrameRate: p.frameRate,
-          },
-        },
-      })
+    ? await capturarNoElectron(sourceId, p, withAudio)
     : await navigator.mediaDevices.getDisplayMedia({
         video: {
           width: { ideal: p.width },
@@ -57,6 +43,41 @@ export async function captureScreen({ preset = 'equilibrado', sourceId = null, w
   track.contentHint = p.contentHint;
 
   return { stream, preset: p };
+}
+
+/**
+ * Caminho do Electron: constraints "chromeMediaSource" legadas, com o id que
+ * veio do desktopCapturer.
+ *
+ * O audio do sistema so sai junto no Windows, e so quando a fonte e uma TELA.
+ * Com uma janela escolhida o pedido inteiro falha — e levaria o video junto.
+ * Por isso a segunda tentativa sem audio: melhor compartilhar mudo do que
+ * nao compartilhar.
+ */
+async function capturarNoElectron(sourceId, preset, withAudio) {
+  const video = {
+    mandatory: {
+      chromeMediaSource: 'desktop',
+      chromeMediaSourceId: sourceId,
+      maxWidth: preset.width,
+      maxHeight: preset.height,
+      maxFrameRate: preset.frameRate,
+    },
+  };
+
+  if (!withAudio) {
+    return navigator.mediaDevices.getUserMedia({ audio: false, video });
+  }
+
+  try {
+    return await navigator.mediaDevices.getUserMedia({
+      audio: { mandatory: { chromeMediaSource: 'desktop' } },
+      video,
+    });
+  } catch (err) {
+    console.warn('sem audio do sistema para esta fonte, seguindo so com video', err);
+    return navigator.mediaDevices.getUserMedia({ audio: false, video });
+  }
 }
 
 export async function captureMicrophone() {

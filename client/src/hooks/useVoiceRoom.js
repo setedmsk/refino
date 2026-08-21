@@ -8,6 +8,7 @@ import {
   readStats,
   PRESETS,
 } from '../lib/media.js';
+import { apiUrl } from '../lib/config';
 
 /**
  * Malha P2P: cada participante mantem uma RTCPeerConnection com cada outro.
@@ -81,7 +82,7 @@ export function useVoiceRoom(socket, me) {
 
   const getIceConfig = useCallback(async () => {
     if (!iceConfig.current) {
-      const res = await fetch('/api/ice', { headers: authHeader() });
+      const res = await fetch(apiUrl('/ice'), { headers: authHeader() });
       iceConfig.current = await res.json();
     }
     return iceConfig.current;

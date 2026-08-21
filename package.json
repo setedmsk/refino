@@ -3,12 +3,17 @@
   "private": true,
   "workspaces": [
     "server",
-    "client"
+    "client",
+    "electron"
   ],
   "scripts": {
     "dev": "npm run dev --workspace server",
     "db:push": "npm run db:push --workspace server",
     "db:studio": "npm run db:studio --workspace server",
-    "dev:client": "npm run dev --workspace client"
+    "dev:client": "npm run dev --workspace client",
+    "dev:electron": "npm run dev --workspace electron",
+    "build:client": "npm run build --workspace client",
+    "pack": "npm run build:client && npm run pack --workspace electron",
+    "dist:win": "npm run build:client && npm run dist:win --workspace electron"
   }
 }

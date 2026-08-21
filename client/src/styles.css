@@ -526,3 +526,83 @@ button, input, textarea { font: inherit; color: inherit; }
 }
 
 .membros .danger:hover { border-color: var(--error); }
+
+/* ------------------------------ electron ------------------------------ */
+
+/*
+ * A janela sobe com frame: false, entao esta barra faz o papel da moldura.
+ * A regiao arrastavel precisa ser explicita, e os botoes precisam sair dela
+ * senao viram area de arrasto e nao clicam.
+ */
+.titlebar {
+  display: flex;
+  align-items: center;
+  height: 32px;
+  padding-left: 12px;
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--line);
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+.titlebar-nome { flex: 1; color: var(--muted); font-size: 12px; }
+
+.titlebar-botoes { display: flex; height: 100%; -webkit-app-region: no-drag; }
+
+.titlebar-botoes button {
+  width: 44px;
+  background: none;
+  border: 0;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.titlebar-botoes button:hover { background: var(--bg-3); color: var(--text); }
+.titlebar-botoes button.fechar:hover { background: #c0392b; color: #fff; }
+
+/* Com a barra ocupando 32px, o resto do app usa o que sobra. */
+.electron .app { height: calc(100vh - 32px); }
+
+.picker { width: min(760px, 94vw); }
+
+.fontes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 10px;
+}
+
+.fonte {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px;
+  background: var(--bg-3);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.fonte:hover { border-color: var(--accent); }
+
+.fonte img {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: contain;
+  background: #000;
+  border-radius: 4px;
+}
+
+.fonte-nome {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.fonte-icone { width: 16px; height: 16px; flex: none; aspect-ratio: auto; background: none; }

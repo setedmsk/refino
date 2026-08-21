@@ -1,3 +1,4 @@
+import { apiUrl } from './config';
 import type { Bootstrap, Invite, Message, Role, User } from '../types';
 
 const TOKEN_KEY = 'token';
@@ -17,7 +18,7 @@ export function setToken(token: string | null) {
  */
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = getToken();
-  const res = await fetch(`/api${path}`, {
+  const res = await fetch(apiUrl(path), {
     ...init,
     headers: {
       ...(init.body ? { 'Content-Type': 'application/json' } : {}),

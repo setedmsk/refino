@@ -1,5 +1,6 @@
 const { app, BrowserWindow, ipcMain, desktopCapturer, session } = require('electron');
 const path = require('path');
+const { pathToFileURL } = require('url');
 
 // Flags que destravam qualidade de tela. Sem isso o Chromium embutido
 // e mais conservador que o Chrome normal.
@@ -25,7 +26,19 @@ function createWindow() {
     },
   });
 
-  win.loadURL(process.env.VITE_DEV_SERVER_URL ?? `file://${path.join(__dirname, '../client/dist/index.html')}`);
+  if (process.env.VITE_DEV_SERVER_URL) {
+    win.loadURL(process.env.VITE_DEV_SERVER_URL);
+    return;
+  }
+
+  // Empacotado, o client vai como extraResources e nao entra no asar.
+  // pathToFileURL em vez de concatenar 'file://': no Windows o caminho comeca
+  // com C:\ e a concatenacao gera uma URL invalida.
+  const indexHtml = app.isPackaged
+    ? path.join(process.resourcesPath, 'client', 'index.html')
+    : path.join(__dirname, '../client/dist/index.html');
+
+  win.loadURL(pathToFileURL(indexHtml).toString());
 }
 
 app.whenReady().then(() => {

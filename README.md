@@ -42,6 +42,28 @@ O `.env` fica em `server/`, que e de onde o servidor e o Prisma CLI rodam.
 O **primeiro cadastro vira OWNER automaticamente e sem convite**. Faça o seu
 antes de qualquer outra pessoa. Depois disso ninguém entra sem código.
 
+## Desktop (Electron)
+
+```bash
+npm install                  # na raiz: instala server, client e electron
+
+# dev — o Vite servindo e o Electron apontando pra ele
+npm run dev:client
+VITE_DEV_SERVER_URL=http://localhost:5173 npm run dev:electron
+
+# empacotar
+npm run pack                 # pasta com o executável, sem instalador
+npm run dist:win             # instalador NSIS + portátil (rode no Windows)
+```
+
+O app desktop pede o **endereço do servidor** na tela de login e guarda
+localmente — ele carrega de `file://`, então não existe origem para onde
+mandar `/api` sozinho.
+
+`npm run dist:win` só gera o `.exe` rodando **no Windows** (ou em Linux com
+wine instalado). O `npm run pack` funciona em qualquer plataforma e serve
+para conferir que o empacotamento está de pé.
+
 ## Colocar no ar de graça
 
 1. VM Always Free na Oracle (região com capacidade ARM disponível)
