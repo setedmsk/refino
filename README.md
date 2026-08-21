@@ -66,12 +66,19 @@ para conferir que o empacotamento está de pé.
 
 ## Colocar no ar de graça
 
+Passo a passo completo em **[deploy/README.md](deploy/README.md)**, com os
+arquivos prontos (`voz.service`, `Caddyfile`, `turnserver.conf`).
+
+O resumo:
+
 1. VM Always Free na Oracle (região com capacidade ARM disponível)
 2. Postgres na mesma VM, ou Neon/Supabase se preferir não administrar
 3. `coturn` na mesma VM — abra **3478 UDP e TCP** e o range **49152-65535 UDP**
    no firewall da Oracle *e* no `iptables` do Ubuntu (a Oracle vem com regras
    locais que ignoram o painel; isso engana muita gente)
 4. No `turnserver.conf`, use `use-auth-secret` com o mesmo valor de `TURN_SECRET`
+5. HTTPS via Caddy. **Não é opcional**: fora de `localhost`, navegador sem TLS
+   não expõe `navigator.mediaDevices` — sem microfone e sem tela
 
 ## Onde a coisa vai doer
 

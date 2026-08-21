@@ -1,0 +1,22 @@
+# /etc/caddy/Caddyfile
+#
+# Troque seu-host.duckdns.org pelo seu dominio. O Caddy tira e renova o
+# certificado do Let's Encrypt sozinho — nao ha nada a configurar alem disto.
+#
+# Por que TLS nao e opcional: fora de localhost, navegador sem HTTPS nao
+# expoe navigator.mediaDevices. Nao e "aviso", o objeto simplesmente nao
+# existe — sem microfone e sem tela. O app Electron escapa disso porque
+# file:// ja e contexto seguro.
+
+seu-host.duckdns.org {
+	encode zstd gzip
+
+	# O WebSocket da sinalizacao passa por aqui. O Caddy ja repassa Upgrade
+	# e Connection sozinho, entao nao ha cabecalho para acertar na mao.
+	reverse_proxy localhost:3001
+
+	log {
+		output file /var/log/caddy/voz.log
+		format console
+	}
+}

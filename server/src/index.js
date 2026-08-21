@@ -4,6 +4,9 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { PrismaClient } from '@prisma/client';
 import { randomBytes, createHmac } from 'crypto';
+import { existsSync } from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 import { httpAuth, socketAuth, register, login, publicUser } from './auth.js';
 import {
@@ -159,6 +162,31 @@ app.get('/api/ice', (req, res) => {
 
   res.json({ iceServers });
 });
+
+/* --------------------------- client web -------------------------------- */
+
+// Em producao o proprio Express serve o client compilado: um processo so,
+// mesma origem. Sem CORS para acertar e sem endereco de servidor para
+// configurar — o navegador ja esta no lugar certo.
+const clientDist = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '../../client/dist'
+);
+
+if (existsSync(path.join(clientDist, 'index.html'))) {
+  app.use(express.static(clientDist));
+
+  // Fallback de SPA. /api e /socket.io ficam DE FORA de proposito: rota de
+  // API que nao existe tem que dar 404 de API, nao devolver o index.html —
+  // senao um erro de digitacao no client vira "JSON invalido" no console.
+  app.get(/^(?!\/api|\/socket\.io).*/, (req, res) => {
+    res.sendFile(path.join(clientDist, 'index.html'));
+  });
+
+  console.log(`Servindo o client de ${clientDist}`);
+} else {
+  console.log('client/dist nao existe — sem client web (rode npm run build:client)');
+}
 
 /* ------------------------- Socket: tempo real -------------------------- */
 

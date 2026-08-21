@@ -1,0 +1,38 @@
+# /etc/systemd/system/voz.service
+#
+#   sudo cp deploy/voz.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now voz
+
+[Unit]
+Description=Servidor de voz (API + sinalizacao WebRTC)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=voz
+WorkingDirectory=/opt/voz/server
+ExecStart=/usr/bin/node src/index.js
+
+# O .env fica fora do repositorio e so o usuario voz le. NUNCA comite ele.
+EnvironmentFile=/opt/voz/server/.env
+Environment=NODE_ENV=production
+
+Restart=always
+RestartSec=3
+
+# A malha e P2P: o servidor so troca SDP e ICE, entao nao precisa de quase
+# nada. Estes limites existem para um bug nao derrubar a VM inteira.
+MemoryMax=512M
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/voz
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
