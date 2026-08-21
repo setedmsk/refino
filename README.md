@@ -33,7 +33,7 @@ cp .env.example .env          # e edite
 openssl rand -base64 32       # cole em JWT_SECRET
 
 npm install                   # npm workspace: instala a partir da raiz
-npm run db:push
+npm run db:deploy          # aplica as migracoes de prisma/migrations
 npm run dev
 ```
 

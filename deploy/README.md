@@ -112,8 +112,12 @@ de uma rede com NAT difícil — todo o resto continua funcionando.
 Aplique o schema:
 
 ```bash
-sudo -u voz -H npm run db:push
+sudo -u voz -H npm run db:deploy
 ```
+
+`db:deploy` roda as migracoes versionadas de `prisma/migrations`. Nao use
+`db:push` num banco com dados: ele compara o schema com o banco e pode
+propor descartar coluna para "sincronizar".
 
 ## 8. Serviço
 
@@ -184,6 +188,6 @@ cd /opt/voz
 sudo -u voz -H git pull
 sudo -u voz -H npm install
 sudo -u voz -H npm run build:client
-sudo -u voz -H npm run db:push
+sudo -u voz -H npm run db:deploy
 sudo systemctl restart voz
 ```

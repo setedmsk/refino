@@ -14,6 +14,8 @@
     "dev:electron": "npm run dev --workspace electron",
     "build:client": "npm run build --workspace client",
     "pack": "npm run build:client && npm run pack --workspace electron",
-    "dist:win": "npm run build:client && npm run dist:win --workspace electron"
+    "dist:win": "npm run build:client && npm run dist:win --workspace electron",
+    "db:migrate": "npm run db:migrate --workspace server",
+    "db:deploy": "npm run db:deploy --workspace server"
   }
 }

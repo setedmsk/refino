@@ -163,12 +163,11 @@ export function AdminPanel({ me, users, permissions, onClose }: Props) {
                       className="danger"
                       disabled={ocupado === u.id}
                       onClick={() => {
-                        // A cascata do schema leva junto tudo que a pessoa
-                        // escreveu. Melhor avisar do que surpreender.
                         const ok = window.confirm(
                           `Expulsar ${u.displayName}?\n\n` +
-                            'Todas as mensagens dessa pessoa serão apagadas junto — ' +
-                            'o banco apaga em cascata. Não dá para desfazer.'
+                            'A pessoa perde o acesso na hora e sai da lista de ' +
+                            'membros. As mensagens dela continuam no histórico. ' +
+                            'Não dá para desfazer pela interface.'
                         );
                         if (ok) acao(u.id, () => api.kickMember(u.id));
                       }}

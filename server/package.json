@@ -5,7 +5,9 @@
     "dev": "node --env-file-if-exists=.env --watch src/index.js",
     "start": "node --env-file-if-exists=.env src/index.js",
     "db:push": "prisma db push",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy"
   },
   "dependencies": {
     "@prisma/client": "^5.20.0",
@@ -15,6 +17,10 @@
     "jsonwebtoken": "^9.0.2",
     "socket.io": "^4.8.0"
   },
-  "devDependencies": { "prisma": "^5.20.0" },
-  "prisma": { "schema": "../prisma/schema.prisma" }
+  "devDependencies": {
+    "prisma": "^5.20.0"
+  },
+  "prisma": {
+    "schema": "../prisma/schema.prisma"
+  }
 }

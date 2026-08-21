@@ -18,11 +18,16 @@ export function signToken(user) {
 // Le o token e busca o usuario FRESCO no banco.
 // Nao confie no role que veio dentro do token: se voce rebaixar alguem,
 // o token antigo dele ainda diria ADMIN ate expirar.
+//
+// Expulso tambem para aqui: a linha dele continua existindo por causa das
+// mensagens, entao quem barra a entrada e o removedAt — nao a ausencia do
+// registro, como era quando o expulsar apagava o usuario.
 export async function resolveUser(prisma, token) {
   if (!token) return null;
   try {
     const payload = jwt.verify(token, SECRET);
-    return await prisma.user.findUnique({ where: { id: payload.sub } });
+    const user = await prisma.user.findUnique({ where: { id: payload.sub } });
+    return user?.removedAt ? null : user;
   } catch {
     return null;
   }
@@ -66,6 +71,8 @@ export async function register(prisma, { username, displayName, password, invite
     if (invite.uses >= invite.maxUses) throw new HttpError(400, 'Convite ja foi usado.');
   }
 
+  // Vale tambem para quem foi expulso: o nome segue ocupado, senao alguem
+  // se cadastra com o nome de quem saiu e herda a cara das mensagens antigas.
   const taken = await prisma.user.findUnique({ where: { username } });
   if (taken) throw new HttpError(409, 'Esse nome de usuario ja existe.');
 
@@ -97,7 +104,7 @@ export async function login(prisma, { username, password }) {
   // quais nomes existem no servidor.
   const hash = user?.passwordHash ?? '$2a$12$invalidinvalidinvalidinvalidinvalidinvalidinvalidinvalidiu';
   const ok = await bcrypt.compare(password, hash);
-  if (!user || !ok) throw new HttpError(401, 'Usuario ou senha incorretos.');
+  if (!user || !ok || user.removedAt) throw new HttpError(401, 'Usuario ou senha incorretos.');
   return { user: publicUser(user), token: signToken(user) };
 }
 

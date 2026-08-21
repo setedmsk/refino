@@ -62,7 +62,10 @@ app.get('/api/me', (req, res) => res.json(publicUser(req.user)));
 app.get('/api/bootstrap', wrap(async (req, res) => {
   const [channels, users, voiceStates] = await Promise.all([
     prisma.channel.findMany({ orderBy: [{ type: 'asc' }, { position: 'asc' }] }),
-    prisma.user.findMany({ orderBy: { displayName: 'asc' } }),
+    prisma.user.findMany({
+      where: { removedAt: null },
+      orderBy: { displayName: 'asc' },
+    }),
     prisma.voiceState.findMany(),
   ]);
   // O front nao tem copia do mapa de cargos — duplicar permissions.js aqui
@@ -117,7 +120,7 @@ app.post('/api/invites', requirePermission('CREATE_INVITE'), wrap(async (req, re
 
 app.patch('/api/members/:id/role', requirePermission('MANAGE_ROLES'), wrap(async (req, res) => {
   const target = await prisma.user.findUnique({ where: { id: req.params.id } });
-  if (!target) throw new HttpError(404, 'Membro nao encontrado.');
+  if (!target || target.removedAt) throw new HttpError(404, 'Membro nao encontrado.');
   assertCanActOn(req.user, target);
   if (!['ADMIN', 'MEMBER'].includes(req.body.role)) {
     throw new HttpError(400, 'So e possivel definir ADMIN ou MEMBER.');
@@ -132,9 +135,22 @@ app.patch('/api/members/:id/role', requirePermission('MANAGE_ROLES'), wrap(async
 
 app.delete('/api/members/:id', requirePermission('KICK_MEMBER'), wrap(async (req, res) => {
   const target = await prisma.user.findUnique({ where: { id: req.params.id } });
-  if (!target) throw new HttpError(404, 'Membro nao encontrado.');
+  if (!target || target.removedAt) throw new HttpError(404, 'Membro nao encontrado.');
   assertCanActOn(req.user, target);
-  await prisma.user.delete({ where: { id: target.id } });
+
+  // Marca em vez de apagar. Apagar levaria junto todas as mensagens da
+  // pessoa pela cascata do Message.author — a conversa dos outros ficaria
+  // cheia de buracos por causa de quem saiu.
+  await prisma.$transaction([
+    prisma.user.update({
+      where: { id: target.id },
+      data: { removedAt: new Date() },
+    }),
+    // Sessao de voz e sessoes salvas nao sobrevivem a expulsao.
+    prisma.voiceState.deleteMany({ where: { userId: target.id } }),
+    prisma.session.deleteMany({ where: { userId: target.id } }),
+  ]);
+
   io.emit('member:removed', { id: target.id });
   disconnectUser(target.id);
   res.json({ ok: true });
