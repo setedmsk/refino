@@ -1,4 +1,4 @@
-import type { Bootstrap, Message, User } from '../types';
+import type { Bootstrap, Invite, Message, Role, User } from '../types';
 
 const TOKEN_KEY = 'token';
 
@@ -59,4 +59,16 @@ export const api = {
     request<Message[]>(
       `/channels/${channelId}/messages${before ? `?before=${before}` : ''}`
     ),
+
+  createInvite: (input: { maxUses: number; expiresInHours: number | null }) =>
+    request<Invite>('/invites', { method: 'POST', body: JSON.stringify(input) }),
+
+  setRole: (userId: string, role: Role) =>
+    request<User>(`/members/${userId}/role`, {
+      method: 'PATCH',
+      body: JSON.stringify({ role }),
+    }),
+
+  kickMember: (userId: string) =>
+    request<{ ok: true }>(`/members/${userId}`, { method: 'DELETE' }),
 };

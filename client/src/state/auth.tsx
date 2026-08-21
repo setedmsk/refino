@@ -22,6 +22,8 @@ type AuthContextValue = {
     inviteCode?: string;
   }) => Promise<void>;
   logout: () => void;
+  /** Cargo mudou embaixo dos pes: o servidor mandou member:updated sobre voce. */
+  applyUser: (user: User) => void;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -62,9 +64,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
+  const applyUser = useCallback((updated: User) => setUser(updated), []);
+
   const value = useMemo(
-    () => ({ user, loading, login, register, logout }),
-    [user, loading, login, register, logout]
+    () => ({ user, loading, login, register, logout, applyUser }),
+    [user, loading, login, register, logout, applyUser]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

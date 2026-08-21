@@ -11,17 +11,41 @@ import { Composer } from './components/Composer';
 import { VoicePanel } from './components/VoicePanel';
 import { ScreenStage } from './components/ScreenStage';
 import { Login } from './components/Login';
-import type { Channel, PeerStats, PresetName, User, VoicePresence, VoiceRoom } from './types';
+import { AdminPanel } from './components/AdminPanel';
+import type {
+  Channel,
+  PeerStats,
+  Permission,
+  PresetName,
+  User,
+  VoicePresence,
+  VoiceRoom,
+} from './types';
 
 export default function App() {
-  const { user, loading, logout } = useAuth();
+  const { user, loading, logout, applyUser } = useAuth();
 
   if (loading) return <div className="boot">…</div>;
   if (!user) return <Login />;
-  return <Chat me={user} onLogout={logout} />;
+  return (
+    <Chat
+      key={user.id}
+      me={user}
+      onLogout={logout}
+      onMeUpdated={applyUser}
+    />
+  );
 }
 
-function Chat({ me, onLogout }: { me: User; onLogout: () => void }) {
+function Chat({
+  me,
+  onLogout,
+  onMeUpdated,
+}: {
+  me: User;
+  onLogout: () => void;
+  onMeUpdated: (user: User) => void;
+}) {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [channels, setChannels] = useState<Channel[]>([]);
   const [users, setUsers] = useState<Record<string, User>>({});
@@ -29,6 +53,8 @@ function Chat({ me, onLogout }: { me: User; onLogout: () => void }) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [fatal, setFatal] = useState<string | null>(null);
   const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [permissions, setPermissions] = useState<Permission[]>([]);
+  const [adminAberto, setAdminAberto] = useState(false);
 
   const voice = useVoiceRoom(socket, me) as VoiceRoom;
 
@@ -78,15 +104,42 @@ function Chat({ me, onLogout }: { me: User; onLogout: () => void }) {
         return { ...prev, [patch.userId]: { ...atual, ...patch } };
       });
 
-    const onMemberUpdated = (user: User) =>
+    const onMemberJoined = (user: User) =>
       setUsers((prev) => ({ ...prev, [user.id]: user }));
+
+    const onMemberUpdated = (user: User) => {
+      setUsers((prev) => ({ ...prev, [user.id]: user }));
+      // Promoveram ou rebaixaram voce com a aba aberta: as permissoes vem
+      // do servidor, entao e so pedir de novo em vez de recalcular no front.
+      if (user.id === me.id) {
+        onMeUpdated(user);
+        api.bootstrap().then((b) => setPermissions(b.permissions)).catch(() => {});
+      }
+    };
+
+    const onMemberRemoved = ({ id }: { id: string }) => {
+      // Expulsaram voce: o token ja nao vale nada no servidor.
+      if (id === me.id) return onLogout();
+      setUsers((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      setVoiceStates((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+    };
 
     s.on('channel:created', onChannelCreated);
     s.on('channel:deleted', onChannelDeleted);
     s.on('voice:peer-joined', onPeerJoined);
     s.on('voice:peer-left', onPeerLeft);
     s.on('voice:state', onVoiceState);
+    s.on('member:joined', onMemberJoined);
     s.on('member:updated', onMemberUpdated);
+    s.on('member:removed', onMemberRemoved);
 
     return () => {
       s.off('channel:created', onChannelCreated);
@@ -94,15 +147,18 @@ function Chat({ me, onLogout }: { me: User; onLogout: () => void }) {
       s.off('voice:peer-joined', onPeerJoined);
       s.off('voice:peer-left', onPeerLeft);
       s.off('voice:state', onVoiceState);
+      s.off('member:joined', onMemberJoined);
       s.off('member:updated', onMemberUpdated);
+      s.off('member:removed', onMemberRemoved);
       disconnectSocket();
     };
-  }, []);
+  }, [me.id, onLogout, onMeUpdated]);
 
   useEffect(() => {
     api
       .bootstrap()
-      .then(({ channels, users, voiceStates }) => {
+      .then(({ channels, users, voiceStates, permissions }) => {
+        setPermissions(permissions);
         setChannels(channels);
         setUsers(Object.fromEntries(users.map((u) => [u.id, u])));
         setVoiceStates(
@@ -201,6 +257,14 @@ function Chat({ me, onLogout }: { me: User; onLogout: () => void }) {
   return (
     <div className="app">
       <div className="sidebar-column">
+        {(permissions.includes('MANAGE_ROLES') ||
+          permissions.includes('KICK_MEMBER') ||
+          permissions.includes('CREATE_INVITE')) && (
+          <button className="admin-abrir" onClick={() => setAdminAberto(true)}>
+            Membros e convites
+          </button>
+        )}
+
         <ChannelList
           channels={channels}
           activeId={activeId}
@@ -274,6 +338,17 @@ function Chat({ me, onLogout }: { me: User; onLogout: () => void }) {
           </div>
         )}
       </main>
+
+      {adminAberto && (
+        <AdminPanel
+          me={me}
+          users={Object.values(users).sort((a, b) =>
+            a.displayName.localeCompare(b.displayName)
+          )}
+          permissions={permissions}
+          onClose={() => setAdminAberto(false)}
+        />
+      )}
     </div>
   );
 }

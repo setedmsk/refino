@@ -47,6 +47,35 @@ export type Bootstrap = {
   channels: Channel[];
   users: User[];
   voiceStates: VoiceState[];
+  /**
+   * O que ESTE usuario pode, ja resolvido pelo permissions.js do servidor.
+   * Serve so para esconder botao — toda rota confere de novo por conta.
+   */
+  permissions: Permission[];
+};
+
+export type Permission =
+  | 'SEND_MESSAGE'
+  | 'DELETE_OWN_MESSAGE'
+  | 'JOIN_VOICE'
+  | 'SHARE_SCREEN'
+  | 'UPLOAD_FILE'
+  | 'MANAGE_CHANNELS'
+  | 'DELETE_ANY_MESSAGE'
+  | 'KICK_MEMBER'
+  | 'CREATE_INVITE'
+  | 'MOVE_VOICE_MEMBER'
+  | 'SERVER_MUTE'
+  | 'MANAGE_ROLES'
+  | 'MANAGE_SERVER';
+
+export type Invite = {
+  id: string;
+  code: string;
+  maxUses: number;
+  uses: number;
+  expiresAt: string | null;
+  createdAt: string;
 };
 
 /** Formato do ack de todo handler de socket guardado por guardSocket. */

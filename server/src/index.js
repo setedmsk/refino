@@ -6,7 +6,14 @@ import { PrismaClient } from '@prisma/client';
 import { randomBytes, createHmac } from 'crypto';
 
 import { httpAuth, socketAuth, register, login, publicUser } from './auth.js';
-import { can, requirePermission, guardSocket, assertCanActOn, HttpError } from './permissions.js';
+import {
+  can,
+  requirePermission,
+  guardSocket,
+  assertCanActOn,
+  HttpError,
+  PERMISSIONS,
+} from './permissions.js';
 
 const prisma = new PrismaClient();
 const app = express();
@@ -19,7 +26,12 @@ app.use(express.json());
 /* ------------------------------- HTTP ---------------------------------- */
 
 app.post('/api/auth/register', wrap(async (req, res) => {
-  res.json(await register(prisma, req.body));
+  const created = await register(prisma, req.body);
+  // Quem ja esta com a aba aberta precisa ver o membro novo aparecer. Sem
+  // isso a lista so atualiza no F5 — todo o resto do servidor avisa, o
+  // cadastro nao avisava porque nasceu fora do socket.
+  io.emit('member:joined', created.user);
+  res.json(created);
 }));
 
 app.post('/api/auth/login', wrap(async (req, res) => {
@@ -37,7 +49,13 @@ app.get('/api/bootstrap', wrap(async (req, res) => {
     prisma.user.findMany({ orderBy: { displayName: 'asc' } }),
     prisma.voiceState.findMany(),
   ]);
-  res.json({ channels, users: users.map(publicUser), voiceStates });
+  // O front nao tem copia do mapa de cargos — duplicar permissions.js aqui
+  // seria criar uma segunda verdade que desanda na primeira mudanca. Ele
+  // recebe pronto o que ESTE usuario pode, e usa so para esconder botao.
+  // Toda rota continua checando por conta propria.
+  const permissions = Object.keys(PERMISSIONS).filter((p) => can(req.user, p));
+
+  res.json({ channels, users: users.map(publicUser), voiceStates, permissions });
 }));
 
 app.get('/api/channels/:id/messages', wrap(async (req, res) => {
