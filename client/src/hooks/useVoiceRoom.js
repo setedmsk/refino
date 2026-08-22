@@ -315,9 +315,11 @@ export function useVoiceRoom(socket, me) {
 
     const track = screenStream.current.getVideoTracks()[0];
     track.contentHint = preset.contentHint;
+    // max nos dois: trocar de preset tem que apertar o teto de verdade,
+    // senao "leitura" so muda o bitrate e a resolucao fica onde estava.
     await track.applyConstraints({
-      width: { ideal: preset.width },
-      height: { ideal: preset.height },
+      width: { max: preset.width },
+      height: { max: preset.height },
       frameRate: { ideal: preset.frameRate, max: preset.frameRate },
     });
     await Promise.all(

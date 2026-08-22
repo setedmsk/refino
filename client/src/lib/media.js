@@ -29,8 +29,13 @@ export async function captureScreen({ preset = 'equilibrado', sourceId = null, w
     ? await capturarNoElectron(sourceId, p, withAudio)
     : await navigator.mediaDevices.getDisplayMedia({
         video: {
-          width: { ideal: p.width },
-          height: { ideal: p.height },
+          // max, nao ideal: `ideal` e preferencia e o navegador ignora
+          // sem avisar. Num monitor 4K isso significa transmitir 4K com o
+          // teto de bitrate do preset — e, com maintain-resolution, o
+          // encoder derruba os fps para sustentar uma resolucao que voce
+          // nao pediu. O caminho do Electron sempre usou maxWidth/maxHeight.
+          width: { max: p.width },
+          height: { max: p.height },
           frameRate: { ideal: p.frameRate, max: p.frameRate },
         },
         audio: withAudio ? { channelCount: 2, echoCancellation: false, noiseSuppression: false } : false,
