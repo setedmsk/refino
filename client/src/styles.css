@@ -22,12 +22,22 @@ body {
 
 button, input, textarea { font: inherit; color: inherit; }
 
+/*
+ * Um filho so, sempre. Em grid (ou flex) cada trecho de texto solto vira um
+ * item proprio e a frase se esparrama em linhas separadas.
+ */
 .boot {
   display: grid;
   place-items: center;
-  height: 100vh;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  padding: 24px;
   color: var(--muted);
+  text-align: center;
 }
+
+.boot p { margin: 0; max-width: 34ch; }
 
 .error { color: var(--error); }
 
@@ -606,3 +616,62 @@ button, input, textarea { font: inherit; color: inherit; }
 }
 
 .fonte-icone { width: 16px; height: 16px; flex: none; aspect-ratio: auto; background: none; }
+
+/* --------------------------- gerenciar canais -------------------------- */
+
+.sidebar h2 { display: flex; align-items: center; gap: 6px; }
+
+.sidebar h2 .add {
+  margin-left: auto;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: 4px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.sidebar h2 .add:hover { background: var(--bg-3); color: var(--text); }
+
+.novo-canal { display: flex; flex-direction: column; gap: 4px; margin: 0 8px 8px; }
+
+.novo-canal input {
+  padding: 6px 8px;
+  background: var(--bg-3);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.novo-canal input:focus { outline: 1px solid var(--accent); }
+.novo-canal small { color: var(--muted); font-size: 11px; }
+
+.channel-row { display: flex; align-items: center; }
+.channel-row .channel { flex: 1; min-width: 0; }
+
+/*
+ * O botao de apagar so aparece no hover. Ele fica sempre no DOM para a
+ * linha nao mudar de largura quando o mouse passa.
+ */
+.apagar {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: 4px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.channel-row:hover .apagar { opacity: 1; }
+.apagar:hover { background: var(--error); color: #fff; }
+.apagar:focus-visible { opacity: 1; }

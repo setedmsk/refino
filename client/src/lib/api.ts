@@ -1,5 +1,5 @@
 import { apiUrl } from './config';
-import type { Bootstrap, Invite, Message, Role, User } from '../types';
+import type { Bootstrap, Channel, Invite, Message, Role, User } from '../types';
 
 const TOKEN_KEY = 'token';
 
@@ -60,6 +60,12 @@ export const api = {
     request<Message[]>(
       `/channels/${channelId}/messages${before ? `?before=${before}` : ''}`
     ),
+
+  createChannel: (input: { name: string; type: 'TEXT' | 'VOICE' }) =>
+    request<Channel>('/channels', { method: 'POST', body: JSON.stringify(input) }),
+
+  deleteChannel: (id: string) =>
+    request<{ ok: true }>(`/channels/${id}`, { method: 'DELETE' }),
 
   createInvite: (input: { maxUses: number; expiresInHours: number | null }) =>
     request<Invite>('/invites', { method: 'POST', body: JSON.stringify(input) }),

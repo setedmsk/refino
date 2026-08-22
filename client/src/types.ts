@@ -8,10 +8,12 @@ export type User = {
   role: Role;
 };
 
+export type ChannelType = 'TEXT' | 'VOICE';
+
 export type Channel = {
   id: string;
   name: string;
-  type: 'TEXT' | 'VOICE';
+  type: ChannelType;
   position: number;
   topic: string | null;
 };

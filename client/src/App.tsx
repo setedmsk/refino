@@ -14,6 +14,7 @@ import { Login } from './components/Login';
 import { AdminPanel } from './components/AdminPanel';
 import type {
   Channel,
+  ChannelType,
   PeerStats,
   Permission,
   PresetName,
@@ -68,8 +69,15 @@ function Chat({
       );
 
     const onChannelDeleted = ({ id }: { id: string }) => {
-      setChannels((prev) => prev.filter((c) => c.id !== id));
-      setActiveId((prev) => (prev === id ? null : prev));
+      setChannels((prev) => {
+        const restantes = prev.filter((c) => c.id !== id);
+        // Apagaram o canal aberto: cai para outro de texto em vez de deixar
+        // a tela vazia com canais existindo na barra ao lado.
+        setActiveId((atual) =>
+          atual === id ? restantes.find((c) => c.type === 'TEXT')?.id ?? null : atual
+        );
+        return restantes;
+      });
     };
 
     // Roster de voz: vale para todo mundo, esteja ou nao na sala.
@@ -214,6 +222,26 @@ function Chat({
     [voice]
   );
 
+  const criarCanal = useCallback(async (nome: string, tipo: ChannelType) => {
+    const criado = await api.createChannel({ name: nome, type: tipo });
+    // O channel:created do socket ja insere na lista (e deduplica por id);
+    // aqui so levamos quem criou para dentro do canal de texto novo.
+    if (criado.type === 'TEXT') setActiveId(criado.id);
+  }, []);
+
+  const apagarCanal = useCallback(async (canal: Channel) => {
+    const ehVoz = canal.type === 'VOICE';
+    const ok = window.confirm(
+      `Apagar #${canal.name}?\n\n` +
+        (ehVoz
+          ? 'Quem estiver na chamada cai.'
+          : 'As mensagens desse canal vão junto — o banco apaga em cascata.') +
+        '\nNão dá para desfazer.'
+    );
+    if (!ok) return;
+    await api.deleteChannel(canal.id);
+  }, []);
+
   const voiceChannel = useMemo(
     () => channels.find((c) => c.id === voice.channelId) ?? null,
     [channels, voice.channelId]
@@ -275,6 +303,9 @@ function Chat({
           onJoinVoice={onJoinVoice}
           voiceChannelId={voice.channelId}
           speaking={voice.speaking}
+          permissions={permissions}
+          onCreateChannel={criarCanal}
+          onDeleteChannel={apagarCanal}
         />
 
         {voiceError && <p className="error voice-error">{voiceError}</p>}
@@ -334,7 +365,11 @@ function Chat({
           </>
         ) : (
           <div className="boot">
-            Nenhum canal de texto. Crie um com <code>POST /api/channels</code>.
+            <p>
+              {permissions.includes('MANAGE_CHANNELS')
+                ? 'Nenhum canal de texto ainda. Use o + ao lado de "Canais de texto".'
+                : 'Nenhum canal de texto ainda. Peça para alguém que administra criar um.'}
+            </p>
           </div>
         )}
       </main>
