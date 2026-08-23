@@ -54,6 +54,15 @@ objeto não existe, e você entra numa chamada muda sem entender por quê.
 | `http://192.168.0.10:3001` | false | **undefined** |
 | Electron (`file://`) | true | existe |
 
+Antes de tudo, veja o que falta na sua máquina:
+
+```bash
+npm run checar
+```
+
+Ele confere Node, `.env`, Postgres, migrações, client compilado e cloudflared,
+e imprime o comando de conserto ao lado de cada pendência.
+
 O caminho mais rápido é um túnel HTTPS. Sem conta, sem custo, sem deploy:
 
 ```bash

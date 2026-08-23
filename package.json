@@ -16,6 +16,7 @@
     "pack": "npm run build:client && npm run pack --workspace electron",
     "dist:win": "npm run build:client && npm run dist:win --workspace electron",
     "db:migrate": "npm run db:migrate --workspace server",
-    "db:deploy": "npm run db:deploy --workspace server"
+    "db:deploy": "npm run db:deploy --workspace server",
+    "checar": "node scripts/checar.mjs"
   }
 }
