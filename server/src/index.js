@@ -25,12 +25,18 @@ const http = createServer(app);
 // recusaria o desktop; por isso "sem origem" e sempre aceito, e CLIENT_ORIGIN
 // (que aceita varios separados por virgula) restringe so os navegadores.
 // Quem protege o servidor e o token, nao o CORS.
-const origensPermitidas = process.env.CLIENT_ORIGIN?.split(',').map((o) => o.trim());
+// filter(Boolean) nao e enfeite: CLIENT_ORIGIN="" vira [""] no split, que e
+// um array cheio de nada — passaria pela checagem e bloquearia TODA origem,
+// justamente na configuracao mais comum (o proprio Express servindo o client).
+const origensPermitidas = process.env.CLIENT_ORIGIN
+  ?.split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
 
 const io = new Server(http, {
   cors: {
     origin(origin, callback) {
-      if (!origin || !origensPermitidas) return callback(null, true);
+      if (!origin || !origensPermitidas?.length) return callback(null, true);
       callback(null, origensPermitidas.includes(origin));
     },
   },

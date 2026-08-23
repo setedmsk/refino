@@ -42,6 +42,47 @@ O `.env` fica em `server/`, que e de onde o servidor e o Prisma CLI rodam.
 O **primeiro cadastro vira OWNER automaticamente e sem convite**. Faça o seu
 antes de qualquer outra pessoa. Depois disso ninguém entra sem código.
 
+## Testar com um amigo em outra máquina
+
+O obstáculo não é o código, é o **contexto seguro**: fora de `localhost`,
+navegador sem HTTPS não expõe `navigator.mediaDevices`. Não é aviso — o
+objeto não existe, e você entra numa chamada muda sem entender por quê.
+
+| origem | `isSecureContext` | `navigator.mediaDevices` |
+|---|---|---|
+| `http://localhost:5173` | true | existe |
+| `http://192.168.0.10:3001` | false | **undefined** |
+| Electron (`file://`) | true | existe |
+
+O caminho mais rápido é um túnel HTTPS. Sem conta, sem custo, sem deploy:
+
+```bash
+# 1. na SUA máquina, o servidor de pé servindo o client
+npm install
+npm run db:deploy
+npm run build:client
+cd server && npm start            # :3001
+
+# 2. em outro terminal, o túnel
+cloudflared tunnel --url http://localhost:3001
+#    -> https://algo-aleatorio.trycloudflare.com
+```
+
+Depois:
+
+1. Você abre a URL do túnel e **se cadastra primeiro** — o primeiro vira OWNER
+2. Painel **Membros e convites** → *Gerar* → manda o código pro seu amigo
+3. Ele abre a mesma URL, clica em *Tenho um convite* e se cadastra
+4. Os dois clicam no canal de voz
+
+Deixe `CLIENT_ORIGIN` **vazio** no `.env`. Preenchido com um endereço fixo, o
+navegador do seu amigo perde o cabeçalho CORS e o socket morre — o app abre e
+não faz nada, sem mensagem de erro.
+
+**Se o texto funcionar e a voz não**, é NAT: sem coturn o `/api/ice` só
+devolve STUN, o que resolve a maioria dos casos mas não todos. Aí o caminho é
+o [deploy](deploy/README.md) com coturn.
+
 ## Desktop (Electron)
 
 ```bash
