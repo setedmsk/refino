@@ -84,8 +84,28 @@ if (env.DATABASE_URL) {
     }
     await prisma.$disconnect();
   } catch (err) {
-    falta(`Postgres nao respondeu (${String(err.message).split('\n')[0].slice(0, 60)})`,
-          'suba o Postgres e confira DATABASE_URL no .env');
+    const msg = String(err.message);
+    // O client do Prisma nao gerado da um erro que NAO fala de banco nenhum.
+    // Sem separar os dois, a pessoa vai caçar Postgres com o Postgres perfeito.
+    const naoGerado =
+      msg.includes('.prisma/client') ||
+      msg.includes('did not initialize yet') ||
+      msg.includes('@prisma/client');
+    if (naoGerado) {
+      falta('client do Prisma nao foi gerado', 'cd server && npx prisma generate');
+    } else {
+      // A mensagem do Prisma as vezes vem vazia; o code (P1001 = nao alcancou
+      // o servidor) e o que sobra para a pessoa nao ficar no escuro.
+      // A primeira linha do erro do Prisma e generica ("Invalid invocation").
+      // A linha util e a que fala de alcance/recusa — procure por ela.
+      const linhas = msg.split('\n').map((l) => l.trim()).filter(Boolean);
+      const util =
+        linhas.find((l) => /P\d{4}|reach|refus|ECONNREFUSED|timeout|denied|does not exist/i.test(l)) ??
+        linhas[0];
+      const detalhe = [err.code, util].filter(Boolean).join(' ').slice(0, 90) || err.name;
+      falta(`Postgres nao respondeu (${detalhe})`,
+            'suba o Postgres e confira DATABASE_URL no .env');
+    }
   }
 }
 
