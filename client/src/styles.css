@@ -307,7 +307,9 @@ button, input, textarea { font: inherit; color: inherit; }
   font-size: 13px;
 }
 
-.voice-name { display: flex; gap: 4px; align-items: baseline; }
+.voice-name { display: flex; gap: 4px; align-items: baseline; flex-wrap: wrap; }
+.voice-name .conexao { color: var(--muted); }
+.voice-name .conexao.ruim { color: #f0a020; }
 .voice-name small { color: var(--muted); font-size: 11px; }
 
 .voice-controls { display: flex; gap: 6px; }

@@ -23,6 +23,21 @@ function PeerAudio({ stream, muted }: { stream: MediaStream; muted: boolean }) {
   return <audio ref={ref} autoPlay muted={muted} />;
 }
 
+/*
+ * O que mostrar quando a conexao com alguem nao esta de pe. 'connected' nao
+ * aparece: o normal e silencio na interface. Aqui a gente so fala quando algo
+ * esta errado — e "falhou" quase sempre quer dizer NAT sem TURN.
+ */
+const ESTADO: Partial<Record<RTCPeerConnectionState, { texto: string; ruim?: boolean }>> = {
+  new: { texto: 'conectando…' },
+  connecting: { texto: 'conectando…' },
+  disconnected: { texto: 'reconectando…', ruim: true },
+  failed: { texto: 'não conectou', ruim: true },
+};
+
+/** Depois disso, "conectando…" deixa de ser paciencia e vira diagnostico. */
+const PACIENCIA_MS = 15_000;
+
 type Props = {
   voice: VoiceRoom;
   channelName: string;
@@ -31,6 +46,17 @@ type Props = {
 };
 
 export function VoicePanel({ voice, channelName, me, members }: Props) {
+  // Um tique enquanto alguem nao conectou, so para o texto envelhecer sozinho.
+  const [, tique] = useState(0);
+  const esperando = members.some(
+    ({ user }) => user.id !== me.id && voice.peerStates[user.id] !== 'connected'
+  );
+  useEffect(() => {
+    if (!esperando) return;
+    const t = setInterval(() => tique((n) => n + 1), 2000);
+    return () => clearInterval(t);
+  }, [esperando]);
+
   const [shareError, setShareError] = useState<string | null>(null);
   const [shareBusy, setShareBusy] = useState(false);
   const [pickerAberto, setPickerAberto] = useState(false);
@@ -80,6 +106,18 @@ export function VoicePanel({ voice, channelName, me, members }: Props) {
       <ul className="voice-members">
         {members.map(({ user, presence }) => {
           const falando = voice.speaking[user.id] === true && !presence.muted;
+          let estado = user.id === me.id ? null : ESTADO[voice.peerStates[user.id]];
+          // Sem candidato nenhum saindo, o Chromium nunca chega em 'failed'.
+          // Passado o limite, dizemos o que quase sempre e: NAT sem TURN.
+          const desde = voice.peerSince[user.id];
+          if (
+            estado &&
+            !estado.ruim &&
+            desde &&
+            Date.now() - desde > PACIENCIA_MS
+          ) {
+            estado = { texto: 'não conectou — provável NAT, precisa de TURN', ruim: true };
+          }
           return (
             <li key={user.id} className={falando ? 'speaking' : undefined}>
               <span className="ring">
@@ -88,6 +126,11 @@ export function VoicePanel({ voice, channelName, me, members }: Props) {
               <span className="voice-name">
                 {user.displayName}
                 {user.id === me.id && <small> você</small>}
+                {estado && (
+                  <small className={estado.ruim ? 'conexao ruim' : 'conexao'}>
+                    {estado.texto}
+                  </small>
+                )}
               </span>
               {presence.streaming && <span className="tag live">tela</span>}
               {presence.muted && <span className="tag">mudo</span>}

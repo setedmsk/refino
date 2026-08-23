@@ -29,6 +29,11 @@ export function useVoiceRoom(socket, me) {
   const [presetName, setPresetName] = useState('equilibrado');
   const [localScreen, setLocalScreen] = useState(null);
   const [stats, setStats] = useState({});       // userId -> { outbound, inbound }
+  const [peerStates, setPeerStates] = useState({}); // userId -> connectionState
+  // Desde quando o peer esta neste estado. O Chromium nunca declara 'failed'
+  // se nenhum candidato chegou a sair — fica em 'connecting' para sempre.
+  // Sem o relogio, a interface diria "conectando…" a noite inteira.
+  const [peerSince, setPeerSince] = useState({}); // userId -> timestamp
 
   const pcs = useRef(new Map());                // userId -> RTCPeerConnection
   const micStream = useRef(null);
@@ -98,6 +103,8 @@ export function useVoiceRoom(socket, me) {
       rtcpMuxPolicy: 'require',
     });
     pcs.current.set(peerId, pc);
+    setPeerStates((prev) => ({ ...prev, [peerId]: pc.connectionState }));
+    setPeerSince((prev) => ({ ...prev, [peerId]: Date.now() }));
 
     // Microfone entra sempre.
     micStream.current?.getAudioTracks().forEach((t) => {
@@ -149,6 +156,13 @@ export function useVoiceRoom(socket, me) {
     };
 
     pc.onconnectionstatechange = () => {
+      // Isto precisa chegar na tela. Sem indicacao visivel, uma conexao que
+      // nao fecha parece exatamente igual a alguem calado: a pessoa aparece
+      // na sala, com anel verde do proprio microfone, e ninguem entende o
+      // silencio. Falhar em voz alta economiza a noite de quem esta testando.
+      setPeerStates((prev) => ({ ...prev, [peerId]: pc.connectionState }));
+      setPeerSince((prev) => ({ ...prev, [peerId]: Date.now() }));
+
       if (['failed', 'closed'].includes(pc.connectionState)) {
         // ICE restart resolve a maioria das quedas (troca de wifi, etc)
         if (pc.connectionState === 'failed' && isInitiator) {
@@ -241,6 +255,8 @@ export function useVoiceRoom(socket, me) {
     setPeers({});
     setSpeaking({});
     setStats({});
+    setPeerStates({});
+    setPeerSince({});
     setConnected(false);
     setChannelId(null);
     setLocalScreen(null);
@@ -404,6 +420,8 @@ export function useVoiceRoom(socket, me) {
       pendingIce.current.delete(userId);
       unwatchSpeaking(userId);
       setPeers((prev) => { const next = { ...prev }; delete next[userId]; return next; });
+      setPeerStates((prev) => { const next = { ...prev }; delete next[userId]; return next; });
+      setPeerSince((prev) => { const next = { ...prev }; delete next[userId]; return next; });
     };
 
     socket.on('voice:peer-joined', onPeerJoined);
@@ -440,6 +458,8 @@ export function useVoiceRoom(socket, me) {
     channelId,
     muted,
     speaking,
+    peerStates,
+    peerSince,
     sharing,
     localScreen,
     presetName,

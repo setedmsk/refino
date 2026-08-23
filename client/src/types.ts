@@ -101,6 +101,10 @@ export type VoiceRoom = {
   channelId: string | null;
   muted: boolean;
   speaking: Record<string, boolean>;
+  /** userId -> RTCPeerConnectionState. Ausente = ainda nao ha conexao com ele. */
+  peerStates: Record<string, RTCPeerConnectionState>;
+  /** userId -> desde quando esta no estado atual (Date.now()). */
+  peerSince: Record<string, number>;
   sharing: boolean;
   localScreen: MediaStream | null;
   presetName: PresetName;
